@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DocEngine — Complete Document Processing & Collaboration Suite</title>
+  <link rel="stylesheet" href="/frontend/styles.css" />
+</head>
+<body>
+  <!-- Top Navigation Bar -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo">DE</div>
+      <div>
+        <div class="brand-title">DocEngine</div>
+        <div class="brand-subtitle">Full-Stack PDF, Office, OCR, Security, Collaboration &amp; Offline AI</div>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <button id="btn-public-share-portal" class="btn btn-outline btn-sm" title="Access a shared link token without logging in">
+        Public Share Link Viewer
+      </button>
+      <div id="auth-user-pill" class="user-pill hidden">
+        <span id="auth-user-email"></span>
+        <button id="btn-logout" class="btn btn-ghost btn-sm">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Toast / Status Banner -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Public Share Link Modal (No Auth Required) -->
+  <div id="share-portal-modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Public Share Link Portal (Zero-Auth Reviewer Mode)</h3>
+        <button id="btn-close-share-portal" class="btn btn-ghost btn-sm">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <input type="text" id="public-share-token-input" class="input" placeholder="Paste share token..." />
+          <button id="btn-load-public-share" class="btn btn-primary">Load Shared File</button>
+        </div>
+        <div id="public-share-details" class="card-subtle hidden">
+          <div class="kv-grid">
+            <div><strong>File ID:</strong> <span id="pub-share-file-id"></span></div>
+            <div><strong>Original Name:</strong> <span id="pub-share-name"></span></div>
+            <div><strong>Permission:</strong> <span id="pub-share-perm" class="badge"></span></div>
+          </div>
+          <div class="action-row" style="margin-top: 10px;">
+            <a id="pub-share-download-link" class="btn btn-primary btn-sm" target="_blank" rel="noopener">Download File</a>
+          </div>
+          <hr class="divider" />
+          <h4>Public Comments on Shared File</h4>
+          <div id="pub-share-comments-list" class="list-box"></div>
+          <div id="pub-share-comment-form" class="form-stack" style="margin-top: 10px;">
+            <div class="form-row">
+              <input type="text" id="pub-comment-author" class="input" placeholder="Your display name (e.g. Guest Reviewer)" />
+              <input type="number" id="pub-comment-page" class="input input-xs" placeholder="Page #" min="1" />
+            </div>
+            <input type="text" id="pub-comment-mentions" class="input" placeholder="Mentions (comma-separated emails, optional)" />
+            <div class="form-row">
+              <input type="text" id="pub-comment-text" class="input" placeholder="Write a review comment..." />
+              <button id="btn-pub-post-comment" class="btn btn-primary">Post Comment</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth Screen -->
+  <main id="auth-screen" class="auth-container">
+    <div class="auth-card">
+      <h2>Welcome to DocEngine</h2>
+      <p class="muted">Sign in or create an account to access all 9 phases of document operations.</p>
+      <div class="tab-bar" style="margin-bottom: 16px;">
+        <button id="tab-auth-login" class="tab-btn active">Login</button>
+        <button id="tab-auth-signup" class="tab-btn">Sign Up</button>
+      </div>
+      <form id="auth-form" class="form-stack">
+        <label class="label">Email Address
+          <input type="email" id="auth-email" class="input" placeholder="you@example.com" required />
+        </label>
+        <label class="label">Password (min 8 characters)
+          <input type="password" id="auth-password" class="input" placeholder="••••••••" minlength="8" required />
+        </label>
+        <button type="submit" id="btn-auth-submit" class="btn btn-primary btn-block">Login</button>
+      </form>
+    </div>
+  </main>
+
+  <!-- Main Workspace (Authenticated) -->
+  <div id="app-workspace" class="workspace hidden">
+    <!-- Left Sidebar: File Library & Upload -->
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <div class="section-header">
+          <h3>Upload Files</h3>
+        </div>
+        <label class="upload-dropzone" id="upload-dropzone">
+          <input type="file" id="file-upload-input" multiple hidden />
+          <div class="dropzone-title">+ Drop or Select Files</div>
+          <div class="dropzone-sub">PDF, DOCX, XLSX, PPTX, PNG/JPG (auto-validated)</div>
+        </label>
+      </div>
+
+      <div class="sidebar-section sidebar-files">
+        <div class="section-header">
+          <h3>My Files (<span id="file-count">0</span>)</h3>
+          <button id="btn-refresh-files" class="btn btn-ghost btn-xs" title="Refresh files">↻</button>
+        </div>
+        <div class="form-row" style="margin-bottom: 8px;">
+          <input type="text" id="file-search-input" class="input input-sm" placeholder="Filter by name or ID..." />
+          <select id="file-format-filter" class="input input-sm" style="max-width: 92px;">
+            <option value="">All</option>
+            <option value="pdf">PDF</option>
+            <option value="docx">DOCX</option>
+            <option value="xlsx">XLSX</option>
+            <option value="pptx">PPTX</option>
+            <option value="image">Image</option>
+            <option value="txt">TXT</option>
+            <option value="csv">CSV</option>
+          </select>
+        </div>
+        <div id="file-list" class="file-list"></div>
+      </div>
+
+      <!-- Active Jobs Queue Monitor -->
+      <div class="sidebar-section">
+        <div class="section-header">
+          <h3>Recent Jobs</h3>
+          <button id="btn-clear-jobs" class="btn btn-ghost btn-xs">Clear</button>
+        </div>
+        <div id="jobs-list" class="jobs-list">
+          <div class="muted small">No jobs run in this session yet.</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Center Panel: Interactive PDF Viewer & Inspector -->
+    <section class="viewer-panel">
+      <div class="viewer-toolbar">
+        <div class="viewer-file-title">
+          <strong id="active-file-label">No file selected</strong>
+          <span id="active-file-badge" class="badge hidden"></span>
+        </div>
+        <div class="viewer-controls">
+          <button id="btn-prev-page" class="btn btn-outline btn-xs" disabled>&larr; Prev</button>
+          <span id="page-indicator" class="small muted">Page - / -</span>
+          <button id="btn-next-page" class="btn btn-outline btn-xs" disabled>Next &rarr;</button>
+          <button id="btn-download-active" class="btn btn-primary btn-xs" disabled>Download</button>
+        </div>
+      </div>
+
+      <div class="canvas-help-bar">
+        <span><strong>Interactive Canvas:</strong> Click &amp; drag on any PDF page below to select a region. Selected PDF-point coordinates (bottom-left origin) auto-fill into Annotations, Redact, Forms, and Hyperlinks.</span>
+        <span id="selected-coords-pill" class="coords-pill">x: 72, y: 650, w: 150, h: 24</span>
+      </div>
+
+      <div id="viewer-stage" class="viewer-stage">
+        <div id="viewer-empty" class="viewer-empty">
+          Select or upload a file on the left to preview pages, inspect metadata, or draw regions.
+        </div>
+        <div id="pdf-canvas-wrapper" class="pdf-canvas-wrapper hidden">
+          <img id="pdf-page-img" alt="PDF Page Preview" draggable="false" />
+          <div id="selection-rect" class="selection-rect hidden"></div>
+        </div>
+        <pre id="text-preview-box" class="text-preview-box hidden"></pre>
+      </div>
+    </section>
+
+    <!-- Right Panel: Operations & Tools (Phases 1–8) -->
+    <section class="tools-panel">
+      <nav class="phase-tabs">
+        <button class="phase-tab active" data-tab="tab-pages">1. Pages &amp; Compress</button>
+        <button class="phase-tab" data-tab="tab-annotate">2. Annotate</button>
+        <button class="phase-tab" data-tab="tab-convert">3. Convert &amp; Extract</button>
+        <button class="phase-tab" data-tab="tab-ocr">4. OCR</button>
+        <button class="phase-tab" data-tab="tab-security">5. Security &amp; Forms</button>
+        <button class="phase-tab" data-tab="tab-collab">6. Docs &amp; Share</button>
+        <button class="phase-tab" data-tab="tab-ai">7. Offline AI &amp; PII</button>
+        <button class="phase-tab" data-tab="tab-meta">8. Structure, Diff &amp; Batch</button>
+      </nav>
+
+      <div class="tools-content">
+        <!-- TAB 1: Phase 1 Core PDF Operations -->
+        <div id="tab-pages" class="tool-pane active">
+          <div class="tool-card">
+            <h4>Single-File Page Operations</h4>
+            <p class="small muted">Operates on the currently selected PDF file.</p>
+            <div class="form-grid-2">
+              <div class="form-stack">
+                <label class="label">Split Ranges (e.g. <code>1-2, 3-5</code> or blank for every page)
+                  <input type="text" id="split-ranges" class="input input-sm" placeholder="1-2, 3-4" />
+                </label>
+                <button id="btn-op-split" class="btn btn-primary btn-sm">Split PDF</button>
+              </div>
+
+              <div class="form-stack">
+                <label class="label">Reorder Pages (1-indexed comma list)
+                  <input type="text" id="reorder-pages" class="input input-sm" placeholder="3, 1, 2" />
+                </label>
+                <button id="btn-op-reorder" class="btn btn-primary btn-sm">Reorder Pages</button>
+              </div>
+
+              <div class="form-stack">
+                <label class="label">Rotate Pages (blank = all pages)
+                  <div class="form-row">
+                    <input type="text" id="rotate-pages" class="input input-sm" placeholder="1, 2" />
+                    <select id="rotate-degrees" class="input input-sm">
+                      <option value="90">90°</option>
+                      <option value="180">180°</option>
+                      <option value="270">270°</option>
+                    </select>
+                  </div>
+                </label>
+                <button id="btn-op-rotate" class="btn btn-primary btn-sm">Rotate Pages</button>
+              </div>
+
+              <div class="form-stack">
+                <label class="label">Delete or Extract Pages (e.g. <code>1, 3</code>)
+                  <input type="text" id="del-ext-pages" class="input input-sm" placeholder="1, 2" />
+                </label>
+                <div class="form-row">
+                  <button id="btn-op-delete-pages" class="btn btn-danger btn-sm">Delete Pages</button>
+                  <button id="btn-op-extract-pages" class="btn btn-primary btn-sm">Extract Pages</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tool-card">
+            <h4>Compress PDF (Pikepdf Image Downsample + QPDF Stream Recompression)</h4>
+            <div class="form-row">
+              <select id="compress-quality" class="input input-sm">
+                <option value="low">Low Compression (85% JPEG, max 2000px)</option>
+                <option value="medium" selected>Medium Compression (60% JPEG, max 1500px)</option>
+                <option value="high">High / Aggressive (35% JPEG, max 1000px)</option>
+              </select>
+              <button id="btn-op-compress" class="btn btn-primary btn-sm">Compress PDF</button>
+            </div>
+            <div id="compress-result" class="result-banner hidden"></div>
+          </div>
+
+          <div class="tool-card">
+            <h4>Multi-File Merge &amp; Image ↔ PDF Conversion</h4>
+            <p class="small muted">Check 2+ files in the left sidebar checkbox list for Merge or Images-to-PDF.</p>
+            <div class="form-row">
+              <button id="btn-op-merge" class="btn btn-primary btn-sm">Merge Checked PDFs</button>
+              <button id="btn-op-images-to-pdf" class="btn btn-primary btn-sm">Checked Images &rarr; PDF</button>
+            </div>
+            <hr class="divider" />
+            <div class="form-row">
+              <label class="small">PDF &rarr; Images:</label>
+              <select id="pdf2img-fmt" class="input input-sm" style="max-width: 90px;">
+                <option value="png">PNG</option>
+                <option value="jpg">JPG</option>
+              </select>
+              <input type="number" id="pdf2img-dpi" class="input input-sm" value="150" min="72" max="600" style="max-width: 90px;" />
+              <button id="btn-op-pdf-to-images" class="btn btn-primary btn-sm">Render Pages to Images</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: Phase 2 Non-Destructive Annotations -->
+        <div id="tab-annotate" class="tool-pane">
+          <div class="tool-card">
+            <h4>Add Non-Destructive Annotation Overlay</h4>
+            <p class="small muted">Tip: Drag a box on the PDF preview canvas to auto-fill Page, X, Y, Width, Height.</p>
+            <div class="form-grid-2">
+              <label class="label">Type
+                <select id="ann-type" class="input input-sm">
+                  <option value="highlight">Highlight</option>
+                  <option value="underline">Underline</option>
+                  <option value="strikethrough">Strikethrough</option>
+                  <option value="stamp">Stamp</option>
+                  <option value="comment">Sticky Comment Pin</option>
+                  <option value="text_edit">Text Edit (Opaque Patch + Replace)</option>
+                  <option value="freehand">Freehand Polyline</option>
+                </select>
+              </label>
+              <label class="label">Page #
+                <input type="number" id="ann-page" class="input input-sm" value="1" min="1" />
+              </label>
+              <label class="label">X (pt, bottom-left)
+                <input type="number" id="ann-x" class="input input-sm" value="72" step="1" />
+              </label>
+              <label class="label">Y (pt, bottom-left)
+                <input type="number" id="ann-y" class="input input-sm" value="650" step="1" />
+              </label>
+              <label class="label">Width (pt)
+                <input type="number" id="ann-w" class="input input-sm" value="150" step="1" />
+              </label>
+              <label class="label">Height (pt)
+                <input type="number" id="ann-h" class="input input-sm" value="20" step="1" />
+              </label>
+              <label class="label">Text (Stamp / Comment / Text Edit)
+                <input type="text" id="ann-text" class="input input-sm" placeholder="APPROVED / Replacement text" />
+              </label>
+              <label class="label">Color &amp; Background
+                <div class="form-row">
+                  <input type="color" id="ann-color" value="#ffff00" />
+                  <input type="color" id="ann-bg" value="#ffffff" title="Background color for text_edit" />
+                  <input type="number" id="ann-fontsize" class="input input-sm" value="11" min="6" max="72" title="Font size for text_edit" />
+                </div>
+              </label>
+            </div>
+            <div class="form-row" style="margin-top: 10px;">
+              <button id="btn-ann-add" class="btn btn-primary btn-sm">Add Annotation</button>
+              <button id="btn-ann-export" class="btn btn-success btn-sm">Flatten &amp; Export to New PDF</button>
+            </div>
+          </div>
+
+          <div class="tool-card">
+            <div class="section-header">
+              <h4>Stored Annotations on Active File</h4>
+              <button id="btn-ann-refresh" class="btn btn-ghost btn-xs">↻ Refresh</button>
+            </div>
+            <div id="ann-list" class="list-box"></div>
+          </div>
+        </div>
+
+        <!-- TAB 3: Phase 3 Office Conversion & Lightweight Extraction -->
+        <div id="tab-convert" class="tool-pane">
+          <div class="tool-card">
+            <h4>Office Cross-Format Conversion (LibreOffice Headless)</h4>
+            <p class="small muted">Convert between DOCX, XLSX, PPTX, ODT, RTF, CSV, HTML, TXT, and PDF.</p>
+            <div class="form-row">
+              <select id="office-target-format" class="input input-sm">
+                <option value="pdf">pdf</option>
+                <option value="docx">docx</option>
+                <option value="xlsx">xlsx</option>
+                <option value="pptx">pptx</option>
+                <option value="odt">odt</option>
+                <option value="rtf">rtf</option>
+                <option value="txt">txt</option>
+                <option value="html">html</option>
+                <option value="csv">csv</option>
+              </select>
+              <button id="btn-op-office-convert" class="btn btn-primary btn-sm">Convert Active File</button>
+            </div>
+          </div>
+
+          <div class="tool-card">
+            <h4>Fast PDF Text Layer Extraction (No LibreOffice)</h4>
+            <div class="form-row">
+              <select id="extract-text-fmt" class="input input-sm">
+                <option value="text">Plain Text (.txt)</option>
+                <option value="markdown">Markdown (.md)</option>
+                <option value="html">HTML (.html)</option>
+              </select>
+              <button id="btn-op-extract-text" class="btn btn-primary btn-sm">Extract Text</button>
+            </div>
+            <pre id="extract-text-preview" class="code-box hidden"></pre>
+          </div>
+        </div>
+
+        <!-- TAB 4: Phase 4 OCR -->
+        <div id="tab-ocr" class="tool-pane">
+          <div class="tool-card">
+            <h4>OCR &amp; Searchable Text Layer (Tesseract + OSD Script Detection)</h4>
+            <p class="small muted">Automatically skips pages that already have real text unless Force is checked.</p>
+            <div class="form-row">
+              <label class="small">Lang:
+                <input type="text" id="ocr-lang" class="input input-sm" value="eng" style="max-width: 70px;" />
+              </label>
+              <label class="small">DPI:
+                <input type="number" id="ocr-dpi" class="input input-sm" value="300" min="100" max="600" style="max-width: 80px;" />
+              </label>
+              <label class="small">
+                <input type="checkbox" id="ocr-force" /> Force re-OCR all pages
+              </label>
+              <button id="btn-op-ocr" class="btn btn-primary btn-sm">Run OCR</button>
+            </div>
+            <div id="ocr-result-box" class="card-subtle hidden" style="margin-top: 10px;">
+              <div id="ocr-summary-line"></div>
+              <p class="small muted">Click any recognized word box below to auto-fill its coordinates into Phase 2's <code>text_edit</code> annotation tool:</p>
+              <div id="ocr-words-list" class="list-box" style="max-height: 200px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 5: Phase 5 Security, Redaction, Watermark, Forms -->
+        <div id="tab-security" class="tool-pane">
+          <div class="tool-card">
+            <h4>Encryption &amp; Permissions (AES-256 / R=6)</h4>
+            <div class="form-row" style="margin-bottom: 8px;">
+              <input type="password" id="sec-inspect-pw" class="input input-sm" placeholder="Password to inspect (optional)" />
+              <button id="btn-sec-inspect" class="btn btn-outline btn-sm">Inspect Security</button>
+            </div>
+            <div id="sec-status-box" class="result-banner hidden"></div>
+            <hr class="divider" />
+            <div class="form-grid-2">
+              <input type="password" id="enc-user-pw" class="input input-sm" placeholder="User password (to open)" />
+              <input type="password" id="enc-owner-pw" class="input input-sm" placeholder="Owner password (optional)" />
+            </div>
+            <div class="form-row" style="margin: 8px 0;">
+              <label class="small"><input type="checkbox" id="enc-allow-print" checked /> Allow Printing</label>
+              <label class="small"><input type="checkbox" id="enc-allow-copy" checked /> Allow Copying</label>
+              <label class="small"><input type="checkbox" id="enc-allow-mod" /> Allow Modification</label>
+            </div>
+            <div class="form-row">
+              <button id="btn-op-encrypt" class="btn btn-primary btn-sm">Encrypt PDF</button>
+              <input type="password" id="dec-pw" class="input input-sm" placeholder="Password to decrypt" />
+              <button id="btn-op-decrypt" class="btn btn-outline btn-sm">Decrypt PDF</button>
+            </div>
+          </div>
+
+          <div class="tool-card">
+            <h4>True Redaction (Full-Page Rasterization)</h4>
+            <p class="small muted">Burns black boxes into pixels and replaces the page with a flat image so underlying text streams are permanently destroyed.</p>
+            <div class="form-row">
+              <button id="btn-redact-add-canvas" class="btn btn-outline btn-sm">+ Add Current Canvas Selection</button>
+              <button id="btn-redact-clear" class="btn btn-ghost btn-sm">Clear List</button>
+              <button id="btn-op-redact" class="btn btn-danger btn-sm">Apply True Redaction</button>
+            </div>
+            <div id="redact-regions-list" class="list-box" style="margin-top: 8px;"></div>
+          </div>
+
+          <div class="tool-card">
+            <h4>Watermark</h4>
+            <div class="form-grid-2">
+              <input type="text" id="wm-text" class="input input-sm" value="CONFIDENTIAL" placeholder="Watermark text" />
+              <div class="form-row">
+                <input type="number" id="wm-opacity" class="input input-sm" value="0.3" step="0.05" min="0.05" max="1" title="Opacity" />
+                <input type="number" id="wm-size" class="input input-sm" value="40" min="10" max="120" title="Font size" />
+                <input type="color" id="wm-color" value="#888888" />
+              </div>
+            </div>
+            <div class="form-row" style="margin-top: 8px;">
+              <label class="small"><input type="checkbox" id="wm-diagonal" checked /> Diagonal (45°)</label>
+              <input type="text" id="wm-pages" class="input input-sm" placeholder="Pages (blank = all)" style="max-width: 140px;" />
+              <button id="btn-op-watermark" class="btn btn-primary btn-sm">Apply Watermark</button>
+            </div>
+          </div>
+
+          <div class="tool-card">
+            <h4>AcroForms (Create, Read &amp; Fill Standard PDF Forms)</h4>
+            <div class="form-row">
+              <input type="text" id="form-field-name" class="input input-sm" placeholder="Field name (e.g. full_name)" />
+              <select id="form-field-type" class="input input-sm" style="max-width: 110px;">
+                <option value="text">Text</option>
+                <option value="checkbox">Checkbox</option>
+              </select>
+              <button id="btn-form-add-field" class="btn btn-outline btn-sm">+ Queue Field at Canvas Coords</button>
+            </div>
+            <div id="form-queued-fields" class="list-box" style="margin-top: 6px;"></div>
+            <div class="form-row" style="margin-top: 8px;">
+              <button id="btn-op-form-create" class="btn btn-primary btn-sm">Embed Queued Fields into PDF</button>
+              <button id="btn-op-form-read" class="btn btn-outline btn-sm">Read Form Data from Active PDF</button>
+            </div>
+            <div id="form-live-fields" class="form-stack" style="margin-top: 8px;"></div>
+          </div>
+        </div>
+
+        <!-- TAB 6: Phase 6 Collaboration, Version History, Sharing & Comments -->
+        <div id="tab-collab" class="tool-pane">
+          <div class="tool-card">
+            <div class="section-header">
+              <h4>Versioned Documents &amp; Edit Locking</h4>
+              <button id="btn-docs-refresh" class="btn btn-ghost btn-xs">↻ Refresh</button>
+            </div>
+            <div class="form-row">
+              <input type="text" id="doc-create-title" class="input input-sm" placeholder="New document title..." />
+              <button id="btn-doc-create" class="btn btn-primary btn-sm">Wrap Active File as Doc v1</button>
+            </div>
+            <div id="docs-list" class="list-box" style="margin-top: 8px;"></div>
+
+            <div id="active-doc-panel" class="card-subtle hidden" style="margin-top: 10px;">
+              <div class="section-header">
+                <strong id="active-doc-title"></strong>
+                <div class="form-row">
+                  <button id="btn-doc-lock" class="btn btn-outline btn-xs">Acquire Lock</button>
+                  <button id="btn-doc-unlock" class="btn btn-outline btn-xs">Release Lock</button>
+                </div>
+              </div>
+              <div class="form-row" style="margin-top: 8px;">
+                <input type="text" id="doc-new-version-label" class="input input-sm" placeholder="Version label (e.g. second draft)" />
+                <button id="btn-doc-add-version" class="btn btn-primary btn-xs">Add Active File as Next Version</button>
+              </div>
+              <h5 style="margin: 8px 0 4px;">Version History (Non-Destructive Revert)</h5>
+              <div id="doc-versions-list" class="list-box"></div>
+
+              <h5 style="margin: 8px 0 4px;">Collaborators</h5>
+              <div class="form-row">
+                <input type="email" id="collab-email" class="input input-sm" placeholder="Collaborator email..." />
+                <select id="collab-perm" class="input input-sm" style="max-width: 100px;">
+                  <option value="view">view</option>
+                  <option value="comment">comment</option>
+                  <option value="edit">edit</option>
+                </select>
+                <button id="btn-collab-add" class="btn btn-primary btn-xs">Add</button>
+              </div>
+              <div id="doc-collabs-list" class="list-box" style="margin-top: 6px;"></div>
+            </div>
+          </div>
+
+          <div class="tool-card">
+            <h4>Public Share Links (Capability Tokens for Active File)</h4>
+            <div class="form-row">
+              <select id="share-perm" class="input input-sm">
+                <option value="view">view</option>
+                <option value="comment">comment</option>
+                <option value="edit">edit</option>
+              </select>
+              <input type="number" id="share-expiry" class="input input-sm" placeholder="Expires in hours (optional)" />
+              <button id="btn-share-create" class="btn btn-primary btn-sm">Create Share Link</button>
+            </div>
+            <div id="shares-list" class="list-box" style="margin-top: 8px;"></div>
+          </div>
+
+          <div class="tool-card">
+            <h4>File Comments &amp; @Mentions</h4>
+            <div class="form-row">
+              <input type="text" id="comment-text" class="input input-sm" placeholder="Add a comment..." />
+              <input type="text" id="comment-mentions" class="input input-sm" placeholder="Mentions (comma emails)" style="max-width: 150px;" />
+              <button id="btn-comment-add" class="btn btn-primary btn-sm">Post</button>
+            </div>
+            <div id="comments-list" class="list-box" style="margin-top: 8px;"></div>
+          </div>
+        </div>
+
+        <!-- TAB 7: Phase 7 Offline AI-Assisted -->
+        <div id="tab-ai" class="tool-pane">
+          <div class="tool-card">
+            <h4>Extractive Document Summarization (TF-IDF Centroid)</h4>
+            <div class="form-row">
+              <label class="small">Sentences:
+                <input type="number" id="ai-sum-sentences" class="input input-sm" value="3" min="1" max="20" style="max-width: 70px;" />
+              </label>
+              <button id="btn-ai-summarize" class="btn btn-primary btn-sm">Summarize Active PDF</button>
+            </div>
+            <pre id="ai-summary-output" class="code-box hidden"></pre>
+          </div>
+
+          <div class="tool-card">
+            <h4>Extractive Document Q&amp;A Search (TF-IDF Cosine Similarity)</h4>
+            <div class="form-row">
+              <input type="text" id="ai-question" class="input input-sm" placeholder="Ask a question about the active PDF..." />
+              <input type="number" id="ai-topk" class="input input-sm" value="3" min="1" max="10" style="max-width: 65px;" />
+              <button id="btn-ai-ask" class="btn btn-primary btn-sm">Search</button>
+            </div>
+            <div id="ai-matches-list" class="list-box" style="margin-top: 8px;"></div>
+          </div>
+
+          <div class="tool-card">
+            <h4>PII Detection (SSN, Email, Phone, Luhn Credit Card) &rarr; One-Click Redact</h4>
+            <div class="form-row">
+              <button id="btn-ai-pii" class="btn btn-primary btn-sm">Scan Active PDF for PII</button>
+              <button id="btn-ai-redact-all-pii" class="btn btn-danger btn-sm hidden">Redact All Detected PII Now</button>
+            </div>
+            <div id="ai-pii-list" class="list-box" style="margin-top: 8px;"></div>
+          </div>
+        </div>
+
+        <!-- TAB 8: Phase 8 Metadata, Structure, Tables, Compare/Analyze & Batch -->
+        <div id="tab-meta" class="tool-pane">
+          <div class="tool-card">
+            <div class="section-header">
+              <h4>PDF Metadata (Standard + Custom Fields)</h4>
+              <button id="btn-meta-load" class="btn btn-ghost btn-xs">↻ Load</button>
+            </div>
+            <div class="form-grid-2">
+              <input type="text" id="meta-title" class="input input-sm" placeholder="Title (empty = remove)" />
+              <input type="text" id="meta-author" class="input input-sm" placeholder="Author" />
+              <input type="text" id="meta-subject" class="input input-sm" placeholder="Subject" />
+              <input type="text" id="meta-keywords" class="input input-sm" placeholder="Keywords" />
+              <input type="text" id="meta-creator" class="input input-sm" placeholder="Creator" />
+              <input type="text" id="meta-custom" class="input input-sm" placeholder="Custom JSON e.g. {&quot;Department&quot;:&quot;Finance&quot;}" />
+            </div>
+            <button id="btn-meta-save" class="btn btn-primary btn-sm" style="margin-top: 8px;">Save Metadata to New PDF</button>
+          </div>
+
+          <div class="tool-card">
+            <div class="section-header">
+              <h4>Bookmarks (With Nesting) &amp; Hyperlinks</h4>
+              <button id="btn-struct-load" class="btn btn-ghost btn-xs">↻ Refresh</button>
+            </div>
+            <div class="form-row">
+              <input type="text" id="bm-title" class="input input-sm" placeholder="Bookmark title" />
+              <input type="number" id="bm-page" class="input input-sm" value="1" min="1" style="max-width: 70px;" />
+              <input type="text" id="bm-parent" class="input input-sm" placeholder="Parent title (optional)" />
+              <button id="btn-bm-add" class="btn btn-primary btn-sm">Add Bookmark</button>
+            </div>
+            <div id="bm-list" class="list-box" style="margin-top: 6px;"></div>
+            <hr class="divider" />
+            <div class="form-row">
+              <input type="text" id="link-url" class="input input-sm" placeholder="External URL (https://...)" />
+              <input type="number" id="link-target-page" class="input input-sm" placeholder="OR Target Page #" min="1" style="max-width: 130px;" />
+              <button id="btn-link-add" class="btn btn-primary btn-sm">Add Link at Canvas Coords</button>
+            </div>
+            <div id="links-list" class="list-box" style="margin-top: 6px;"></div>
+          </div>
+
+          <div class="tool-card">
+            <h4>Table Extraction, Readability Analysis, Duplicates &amp; Diff</h4>
+            <div class="form-row">
+              <select id="table-fmt" class="input input-sm" style="max-width: 100px;">
+                <option value="xlsx">XLSX</option>
+                <option value="csv">CSV</option>
+              </select>
+              <button id="btn-op-tables" class="btn btn-primary btn-sm">Extract Tables</button>
+              <button id="btn-op-analyze" class="btn btn-outline btn-sm">Readability Analysis</button>
+              <button id="btn-op-duplicates" class="btn btn-outline btn-sm">Find Duplicate Pages</button>
+            </div>
+            <div id="analysis-output" class="result-banner hidden" style="margin-top: 8px;"></div>
+            <hr class="divider" />
+            <div class="form-row">
+              <label class="small">Compare Active PDF vs:</label>
+              <select id="compare-file-b" class="input input-sm"></select>
+              <button id="btn-op-compare" class="btn btn-primary btn-sm">Run Diff</button>
+            </div>
+            <pre id="compare-diff-output" class="code-box hidden"></pre>
+          </div>
+
+          <div class="tool-card">
+            <h4>Batch Operations (Across All Checked Files in Sidebar)</h4>
+            <div class="form-row">
+              <select id="batch-op" class="input input-sm">
+                <option value="compress">compress</option>
+                <option value="watermark">watermark</option>
+                <option value="rotate">rotate</option>
+                <option value="ocr">ocr</option>
+                <option value="encrypt">encrypt</option>
+              </select>
+              <input type="text" id="batch-params" class="input input-sm" value='{"quality": "medium"}' placeholder='Params JSON e.g. {"quality":"high"}' />
+              <button id="btn-op-batch" class="btn btn-primary btn-sm">Run Batch</button>
+            </div>
+            <div id="batch-results" class="list-box" style="margin-top: 8px;"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/frontend/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+flask
+pypdf
+pikepdf
+pillow
+img2pdf
+pypdfium2
+pyjwt
+reportlab
+python-docx
+openpyxl
+python-pptx
+pdfplumber
+pytesseract
+scikit-learn
+gunicorn

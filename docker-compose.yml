@@ -1,0 +1,13 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DOCENGINE_SECRET=${DOCENGINE_SECRET:?required}
+    volumes:
+      - docengine-storage:/srv/storage
+    restart: unless-stopped
+
+volumes:
+  docengine-storage:
